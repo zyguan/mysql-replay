@@ -48,6 +48,7 @@ func NewServeCmd() *cobra.Command {
 				Fetcher: fetcher,
 				Filter:  core.FilterByPort(opts.Ports),
 				Emit:    consume,
+				Speed:   opts.Speed,
 			})
 
 			go func() {

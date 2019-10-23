@@ -16,6 +16,7 @@ type ReplayFlags struct {
 	stream.ReplayOptions
 	stream.FactoryOptions
 	Ports []int
+	Speed float64
 }
 
 func (rf *ReplayFlags) Register(flags *pflag.FlagSet, defaultCCSize uint) {
@@ -23,6 +24,7 @@ func (rf *ReplayFlags) Register(flags *pflag.FlagSet, defaultCCSize uint) {
 	flags.BoolVar(&rf.DryRun, "dry-run", false, "dry run mode (just print statements)")
 	flags.UintVar(&rf.ConnCacheSize, "conn-cache-size", defaultCCSize, "packet cache size for each connection")
 	flags.IntSliceVar(&rf.Ports, "ports", []int{4000}, "ports to filter in")
+	flags.Float64Var(&rf.Speed, "speed", 1, "replay speed ratio")
 }
 
 func NewReplayCmd() *cobra.Command {
@@ -43,7 +45,11 @@ func NewReplayCmd() *cobra.Command {
 			go func() {
 				defer close(ch)
 				for _, in := range args {
-					core.OfflineReplayTask{File: in, Filter: core.FilterByPort(opts.Ports)}.Run(consume)
+					core.OfflineReplayTask{
+						File:       in,
+						Filter:     core.FilterByPort(opts.Ports),
+						SpeedRatio: opts.Speed,
+					}.Run(consume)
 				}
 			}()
 
