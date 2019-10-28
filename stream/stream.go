@@ -11,6 +11,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/reassembly"
 	"github.com/juju/errors"
+	"github.com/zyguan/mysql-replay/stats"
 	"go.uber.org/zap"
 )
 
@@ -60,6 +61,7 @@ func (f *mysqlStreamFactory) New(netFlow, tcpFlow gopacket.Flow, tcp *layers.TCP
 			handler.OnPayload(p)
 		}
 	}()
+	stats.Add(stats.Streams, 1)
 	return &mysqlStream{key, log, nil, 0, ch, done, handler, f.opts}
 }
 
@@ -125,12 +127,14 @@ func (s *mysqlStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.A
 	s.buf, s.seq = nil, 0
 
 	s.ch <- p
+	stats.Add(stats.Packets, 1)
 }
 
 func (s *mysqlStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	close(s.ch)
 	<-s.done
 	s.h.OnClose()
+	stats.Add(stats.Streams, -1)
 	return false
 }
 

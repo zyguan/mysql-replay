@@ -9,7 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/zyguan/mysql-replay/core"
+	"github.com/zyguan/mysql-replay/stats"
 	"github.com/zyguan/mysql-replay/stream"
+	"go.uber.org/zap"
 )
 
 type ReplayFlags struct {
@@ -29,6 +31,7 @@ func (rf *ReplayFlags) Register(flags *pflag.FlagSet, defaultCCSize uint) {
 
 func NewReplayCmd() *cobra.Command {
 	var opts ReplayFlags
+	var reportInterval time.Duration
 	cmd := &cobra.Command{
 		Use:   "replay",
 		Short: "Replay pcap files",
@@ -53,11 +56,37 @@ func NewReplayCmd() *cobra.Command {
 				}
 			}()
 
+			go func() {
+				prv := stats.Dump()
+				for {
+					time.Sleep(reportInterval)
+					cur := stats.Dump()
+					zap.L().Info("progress",
+						zap.Int64("conns", cur[stats.Connections]),
+						zap.Int64("streams", cur[stats.Streams]),
+						zap.Int64("packets", cur[stats.Packets]),
+						zap.Int64("queries", cur[stats.Queries]),
+						zap.Int64("failed_queries", cur[stats.FailedQueries]),
+						zap.Float64("qps", float64(cur[stats.Queries]-prv[stats.Queries])/float64(reportInterval/time.Second)),
+					)
+					prv = cur
+				}
+			}()
+
+			t0 := time.Now()
 			for {
 				select {
 				case pkt := <-ch:
 					if pkt == nil {
 						assembler.FlushAll()
+						t1 := time.Now()
+						cur := stats.Dump()
+						zap.L().Info("progress",
+							zap.Int64("packets", cur[stats.Packets]),
+							zap.Int64("queries", cur[stats.Queries]),
+							zap.Int64("failed_queries", cur[stats.FailedQueries]),
+							zap.Duration("duration", t1.Sub(t0)),
+						)
 						return
 					}
 					assembler.AssembleWithContext(
@@ -71,6 +100,7 @@ func NewReplayCmd() *cobra.Command {
 		},
 	}
 	opts.Register(cmd.Flags(), 0)
+	cmd.PersistentFlags().DurationVar(&reportInterval, "report-interval", 5*time.Second, "report interval")
 	return cmd
 }
 

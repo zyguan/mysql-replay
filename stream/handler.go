@@ -7,6 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/reassembly"
+	"github.com/zyguan/mysql-replay/stats"
 	"go.uber.org/zap"
 )
 
@@ -67,7 +68,7 @@ func (o ReplayOptions) NewStreamHandler(key ConnKey) MySQLStreamHandler {
 	log := zap.L().Named("mysql-stream")
 	rh := &replayHandler{opts: o, key: key, log: log}
 	if o.DryRun {
-		log.Info("connect to target db", zap.String("dsn", o.TargetDSN))
+		log.Debug("fake connect to target db", zap.String("dsn", o.TargetDSN))
 		return rh
 	}
 	var err error
@@ -78,6 +79,7 @@ func (o ReplayOptions) NewStreamHandler(key ConnKey) MySQLStreamHandler {
 		return RejectConn(key)
 	}
 	rh.log.Debug("open connection to " + rh.opts.TargetDSN)
+	stats.Add(stats.Connections, 1)
 	return rh
 }
 
@@ -105,13 +107,15 @@ func (rh *replayHandler) OnPayload(p MySQLPayload) {
 		raw := p.Packets[0]
 		cmd := raw[0]
 		if p.StartSeq == 0 && cmd == comQuery {
+			stats.Add(stats.Queries, 1)
 			query := string(raw[1:])
 			if rh.db == nil {
-				rh.l(p.Dir).Info("execute query", zap.String("sql", query))
+				rh.l(p.Dir).Debug("execute query", zap.String("sql", query))
 				return
 			}
 			if _, err := rh.db.Exec(query); err != nil {
 				rh.l(p.Dir).Warn("execute query", zap.String("sql", query), zap.Error(err))
+				stats.Add(stats.FailedQueries, 1)
 			}
 		} else {
 			switch cmd {
@@ -129,6 +133,7 @@ func (rh *replayHandler) OnClose() {
 	rh.log.Debug("close connection to " + rh.opts.TargetDSN)
 	if rh.db != nil {
 		rh.db.Close()
+		stats.Add(stats.Connections, -1)
 	}
 }
 
