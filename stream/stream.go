@@ -81,7 +81,6 @@ type mysqlStream struct {
 
 func (s *mysqlStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassembly.TCPFlowDirection, nextSeq reassembly.Sequence, start *bool, ac reassembly.AssemblerContext) bool {
 	// TODO: do basic validation, ref: https://github.com/google/gopacket/blob/ec90f6c2c025516eabdf6bf374b615ff0bf32c21/examples/reassemblydump/main.go#L336
-	// TODO: maybe expose prometheus metrics
 	if !s.h.Accept(tcp, dir, nextSeq) {
 		return false
 	}
@@ -183,7 +182,6 @@ func readOnePacket(r io.Reader, seq *uint8) ([]byte, error) {
 	}
 
 	if seq != nil && header[3] != *seq {
-		zap.S().Info(hex.EncodeToString(header[:]))
 		return nil, errors.New("invalid sequence: " + strconv.Itoa(int(header[3])) + " != " + strconv.Itoa(int(*seq)))
 	}
 	size := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)

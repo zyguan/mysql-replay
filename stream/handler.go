@@ -67,7 +67,7 @@ func (o ReplayOptions) NewStreamHandler(key ConnKey) MySQLStreamHandler {
 	log := zap.L().Named("mysql-stream")
 	rh := &replayHandler{opts: o, key: key, log: log}
 	if o.DryRun {
-		log.Info("open connection to " + o.TargetDSN)
+		log.Info("connect to target db", zap.String("dsn", o.TargetDSN))
 		return rh
 	}
 	var err error
@@ -77,7 +77,7 @@ func (o ReplayOptions) NewStreamHandler(key ConnKey) MySQLStreamHandler {
 			zap.String("dsn", o.TargetDSN), zap.Error(err))
 		return RejectConn(key)
 	}
-	log.Info("open connection to " + o.TargetDSN)
+	rh.log.Debug("open connection to " + rh.opts.TargetDSN)
 	return rh
 }
 
@@ -117,7 +117,7 @@ func (rh *replayHandler) OnPayload(p MySQLPayload) {
 			switch cmd {
 			case comFieldList:
 			default:
-				rh.l(p.Dir).Debug("drop request", zap.String("raw", hex.EncodeToString(raw)))
+				rh.l(p.Dir).Info("ignore non-query request", zap.String("raw", hex.EncodeToString(raw)))
 			}
 		}
 	} else {
@@ -126,7 +126,7 @@ func (rh *replayHandler) OnPayload(p MySQLPayload) {
 }
 
 func (rh *replayHandler) OnClose() {
-	rh.log.Info("close connection to " + rh.opts.TargetDSN)
+	rh.log.Debug("close connection to " + rh.opts.TargetDSN)
 	if rh.db != nil {
 		rh.db.Close()
 	}
