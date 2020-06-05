@@ -7,7 +7,9 @@ require (
 	github.com/gocraft/dbr/v2 v2.6.3
 	github.com/google/gopacket v1.1.17
 	github.com/juju/errors v0.0.0-20190930114154-d42613fe1ab9
+	github.com/juju/testing v0.0.0-20200510222523-6c8c298c77a0 // indirect
 	github.com/mattn/go-sqlite3 v1.11.0
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
 	go.uber.org/atomic v1.4.0 // indirect

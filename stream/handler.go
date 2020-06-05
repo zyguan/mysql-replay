@@ -3,6 +3,7 @@ package stream
 import (
 	"database/sql"
 	"encoding/hex"
+	"regexp"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/gopacket/layers"
@@ -62,11 +63,37 @@ func (r *rejectHandler) OnClose() {}
 type ReplayOptions struct {
 	DryRun    bool
 	TargetDSN string
+	FilterIn  string
+	FilterOut string
 }
 
 func (o ReplayOptions) NewStreamHandler(key ConnKey) MySQLStreamHandler {
 	log := zap.L().Named("mysql-stream")
 	rh := &replayHandler{opts: o, key: key, log: log}
+	if len(o.FilterIn) >= 0 {
+		if p, err := regexp.Compile(o.FilterIn); err != nil {
+			log.Warn("invalid filter-in regexp", zap.Error(err))
+		} else {
+			rh.filter = func(s string) bool {
+				return p.FindStringIndex(s) != nil
+			}
+		}
+	}
+	if len(o.FilterOut) > 0 {
+		if p, err := regexp.Compile(o.FilterOut); err != nil {
+			log.Warn("invalid filter-out regexp", zap.Error(err))
+		} else {
+			if filter := rh.filter; filter != nil {
+				rh.filter = func(s string) bool {
+					return filter(s) && p.FindStringIndex(s) == nil
+				}
+			} else {
+				rh.filter = func(s string) bool {
+					return p.FindStringIndex(s) == nil
+				}
+			}
+		}
+	}
 	if o.DryRun {
 		log.Debug("fake connect to target db", zap.String("dsn", o.TargetDSN))
 		return rh
@@ -86,10 +113,11 @@ func (o ReplayOptions) NewStreamHandler(key ConnKey) MySQLStreamHandler {
 var _ MySQLStreamHandler = &replayHandler{}
 
 type replayHandler struct {
-	opts ReplayOptions
-	key  ConnKey
-	log  *zap.Logger
-	db   *sql.DB
+	opts   ReplayOptions
+	key    ConnKey
+	log    *zap.Logger
+	db     *sql.DB
+	filter func(s string) bool
 }
 
 func (rh *replayHandler) Accept(tcp *layers.TCP, dir reassembly.TCPFlowDirection, nextSeq reassembly.Sequence) bool {
@@ -109,8 +137,11 @@ func (rh *replayHandler) OnPayload(p MySQLPayload) {
 		if p.StartSeq == 0 && cmd == comQuery {
 			stats.Add(stats.Queries, 1)
 			query := string(raw[1:])
+			if rh.filter != nil && !rh.filter(query) {
+				return
+			}
 			if rh.db == nil {
-				rh.l(p.Dir).Debug("execute query", zap.String("sql", query))
+				rh.l(p.Dir).Info("execute query", zap.String("sql", query))
 				return
 			}
 			if _, err := rh.db.Exec(query); err != nil {
@@ -121,7 +152,7 @@ func (rh *replayHandler) OnPayload(p MySQLPayload) {
 			switch cmd {
 			case comFieldList:
 			default:
-				rh.l(p.Dir).Info("ignore non-query request", zap.String("raw", hex.EncodeToString(raw)))
+				rh.l(p.Dir).Debug("ignore non-query request", zap.String("raw", hex.EncodeToString(raw)))
 			}
 		}
 	} else {
