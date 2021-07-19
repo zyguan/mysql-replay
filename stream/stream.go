@@ -95,6 +95,10 @@ func (s *mysqlStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.A
 	if length == 0 {
 		return
 	}
+	if ac == nil || s == nil {
+		zap.L().Info(">>> skip nil context", zap.Bool("ac", ac == nil), zap.Bool("ms", s == nil))
+		return
+	}
 
 	data := sg.Fetch(length)
 	dir, _, _, _ := sg.Info()
