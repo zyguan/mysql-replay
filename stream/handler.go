@@ -144,9 +144,7 @@ func (rh *replayHandler) OnPayload(p MySQLPayload) {
 				rh.l(p.Dir).Info("execute query", zap.String("sql", query))
 				return
 			}
-			zap.L().Sugar().Info(">>> %v", rh)
 			if _, err := rh.db.Exec(query); err != nil {
-				zap.L().Sugar().Info(">>> %v", rh.log)
 				rh.l(p.Dir).Warn("execute query", zap.String("sql", query), zap.Error(err))
 				stats.Add(stats.FailedQueries, 1)
 			}
