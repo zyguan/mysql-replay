@@ -91,6 +91,10 @@ func (s *mysqlStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reass
 }
 
 func (s *mysqlStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.AssemblerContext) {
+	if ac == nil {
+		s.log.Info("skip nil assembler context")
+		return
+	}
 	length, _ := sg.Lengths()
 	if length == 0 {
 		return
